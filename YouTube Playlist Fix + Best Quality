@@ -1,0 +1,73 @@
+// ==UserScript==
+// @name         YouTube Playlist Fix + Best Quality
+// @namespace    zen
+// @version      1.4-clean
+// @description  Fixes broken YouTube playlist clicks in Opera GX and forces highest available quality.
+// @match        https://www.youtube.com/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+// Force ALL YouTube video navigation to do a real page load
+document.addEventListener('click', function (e) {
+    const link = e.target.closest('a');
+
+    if (!link || !link.href) return;
+
+    try {
+        const url = new URL(link.href);
+
+        const isYouTubeWatch =
+            url.hostname.includes('youtube.com') &&
+            url.pathname === '/watch' &&
+            url.searchParams.has('v');
+
+        if (isYouTubeWatch) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            window.location.href = link.href;
+        }
+    } catch (err) {
+        console.warn('[YT Fix] Navigation intercept failed:', err);
+    }
+}, true);
+
+    // Force highest available video quality
+    function forceBestQuality() {
+        const player = document.querySelector('.html5-video-player');
+        if (!player) return;
+
+        try {
+            const levels = player.getAvailableQualityLevels?.() || [];
+            if (!levels.length) return;
+
+            const best = levels[0];
+
+            player.setPlaybackQualityRange?.(best);
+            player.setPlaybackQuality?.(best);
+
+            console.log('[YT Fix] Forced quality:', best);
+        } catch (err) {
+            console.warn('[YT Fix] Quality force failed:', err);
+        }
+    }
+
+    function runQualityFixLoop() {
+        let attempts = 0;
+
+        const interval = setInterval(() => {
+            forceBestQuality();
+            attempts++;
+
+            if (attempts >= 12) {
+                clearInterval(interval);
+            }
+        }, 1000);
+    }
+
+    window.addEventListener('load', runQualityFixLoop);
+    document.addEventListener('yt-navigate-finish', runQualityFixLoop);
+})();
