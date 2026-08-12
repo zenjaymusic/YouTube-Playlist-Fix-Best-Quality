@@ -1,3 +1,7 @@
+# This script is now useless; YT fixed the bug.
+
+>>>
+
 # YouTube Playlist Fix + Best Quality
 
 A Tampermonkey userscript that fixes broken playlist navigation in Opera GX and forces YouTube to always play at the highest available quality.
