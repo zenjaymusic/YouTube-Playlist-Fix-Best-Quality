@@ -1,0 +1,91 @@
+// ==UserScript==
+// @name         YouTube Playlist Fix + Best Quality (1080p cap)
+// @namespace    zen
+// @version      1.5-clean
+// @description  Fixes broken YouTube playlist clicks in Opera GX and forces the highest quality up to 1080p.
+// @match        https://www.youtube.com/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    // Highest first. Anything above the cap gets sliced off below.
+    const QUALITY_ORDER = [
+        'highres', 'hd2880', 'hd2160', 'hd1440',
+        'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'
+    ];
+    const MAX_QUALITY = 'hd1080';
+    const ALLOWED = QUALITY_ORDER.slice(QUALITY_ORDER.indexOf(MAX_QUALITY));
+
+    // --- Force ALL YouTube video navigation to do a real page load ---
+    document.addEventListener('click', function (e) {
+        const link = e.target.closest('a');
+        if (!link || !link.href) return;
+        try {
+            const url = new URL(link.href);
+            const isYouTubeWatch =
+                url.hostname.includes('youtube.com') &&
+                url.pathname === '/watch' &&
+                url.searchParams.has('v');
+            if (isYouTubeWatch) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                window.location.href = link.href;
+            }
+        } catch (err) {
+            console.warn('[YT Fix] Navigation intercept failed:', err);
+        }
+    }, true);
+
+    // --- Force best quality, capped at 1080p ---
+    function pickQuality(levels) {
+        // First allowed entry that YouTube actually offers for this video.
+        return ALLOWED.find(q => levels.includes(q)) || null;
+    }
+
+    function forceCappedQuality() {
+        const player = document.querySelector('.html5-video-player');
+        if (!player) return false;
+        try {
+            const levels = player.getAvailableQualityLevels?.() || [];
+            if (!levels.length) return false;
+
+            const target = pickQuality(levels);
+            if (!target) return false;
+
+            // Range call sets both floor and ceiling so YouTube can't drift back up.
+            player.setPlaybackQualityRange?.(target, target);
+            player.setPlaybackQuality?.(target);
+
+            const current = player.getPlaybackQuality?.();
+            if (current === target) {
+                console.log('[YT Fix] Quality locked at:', target);
+                return true;
+            }
+            return false;
+        } catch (err) {
+            console.warn('[YT Fix] Quality force failed:', err);
+            return false;
+        }
+    }
+
+    let qualityTimer = null;
+
+    function runQualityFixLoop() {
+        if (qualityTimer) clearInterval(qualityTimer);
+
+        let attempts = 0;
+        qualityTimer = setInterval(() => {
+            const done = forceCappedQuality();
+            attempts++;
+            if (done || attempts >= 12) {
+                clearInterval(qualityTimer);
+                qualityTimer = null;
+            }
+        }, 1000);
+    }
+
+    window.addEventListener('load', runQualityFixLoop);
+    document.addEventListener('yt-navigate-finish', runQualityFixLoop);
+})();
